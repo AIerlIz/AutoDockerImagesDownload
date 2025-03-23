@@ -1,9 +1,9 @@
 name: Build and Release seatable.tar.gz
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types:
+      - created
 
 jobs:
   build-and-release:
