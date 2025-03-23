@@ -4,7 +4,8 @@ on:
   release:
     types: [created]
   schedule:
-    - cron: '0 0 * * *' # 每天 00:00 执行
+    - cron: '0 5 * * *' # 每天 00:00 执行
+      timezone: Asia/Shanghai # 设置时区为中国
 
 jobs:
   build-and-release:
