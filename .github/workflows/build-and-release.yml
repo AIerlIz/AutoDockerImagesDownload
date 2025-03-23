@@ -2,12 +2,13 @@ name: Build and Release seatable.tar.gz
 
 on:
   release:
-    types:
-      - created
+    types: [created]
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    permissions:  # 添加权限
+      contents: write
 
     steps:
       # 检出代码
@@ -37,11 +38,10 @@ jobs:
             redis:5.0.7 \
             | gzip > output/seatable.tar.gz
 
-      # 上传到 GitHub Releases
-      - name: Upload to GitHub Releases
-        uses: actions/upload-release-asset@v1
+      # 上传到 GitHub Releases（使用更可靠的 action）
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: output/seatable.tar.gz
-          asset_name: seatable.tar.gz
-          asset_content_type: application/gzip
+          files: output/seatable.tar.gz  # 自动匹配当前 Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 自动注入，无需额外配置
