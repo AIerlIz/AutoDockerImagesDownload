@@ -1,0 +1,47 @@
+name: Build and Release seatable.tar.gz
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 拉取镜像
+      - name: Pull Docker images
+        run: |
+          docker pull seatable/seatable-python-runner:latest
+          docker pull seatable/seatable-developer:latest
+          docker pull seatable/seatable-python-starter:latest
+          docker pull seatable/seatable-python-scheduler:latest
+          docker pull mariadb:10.11
+          docker pull redis:5.0.7
+
+      # 保存镜像到 tar 文件
+      - name: Save images to tar.gz
+        run: |
+          mkdir -p output
+          docker save \
+            seatable/seatable-python-runner:latest \
+            seatable/seatable-developer:latest \
+            seatable/seatable-python-starter:latest \
+            seatable/seatable-python-scheduler:latest \
+            mariadb:10.11 \
+            redis:5.0.7 \
+            | gzip > output/seatable.tar.gz
+
+      # 上传到 GitHub Releases
+      - name: Upload to GitHub Releases
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: output/seatable.tar.gz
+          asset_name: seatable.tar.gz
+          asset_content_type: application/gzip
