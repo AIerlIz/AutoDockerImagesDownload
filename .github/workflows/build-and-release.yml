@@ -3,6 +3,8 @@ name: Build and Release seatable.tar.gz
 on:
   release:
     types: [created]
+  schedule:
+    - cron: '0 0 * * *' # 每天 00:00 执行
 
 jobs:
   build-and-release:
@@ -39,3 +41,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: output/seatable.tar.gz  # 自动匹配文件名和 Release
+          tag_name: latest              # 指定上传到 latest 标签
+          overwrite: true               # 覆盖已有的 latest 标签
