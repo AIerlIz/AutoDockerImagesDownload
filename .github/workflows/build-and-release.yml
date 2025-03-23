@@ -7,15 +7,13 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    permissions:  # 添加权限
-      contents: write
+    permissions:
+      contents: write  # 关键权限
 
     steps:
-      # 检出代码
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 拉取镜像
       - name: Pull Docker images
         run: |
           docker pull seatable/seatable-python-runner:latest
@@ -25,7 +23,6 @@ jobs:
           docker pull mariadb:10.11
           docker pull redis:5.0.7
 
-      # 保存镜像到 tar 文件
       - name: Save images to tar.gz
         run: |
           mkdir -p output
@@ -38,10 +35,7 @@ jobs:
             redis:5.0.7 \
             | gzip > output/seatable.tar.gz
 
-      # 上传到 GitHub Releases（使用更可靠的 action）
-      - name: Upload Release Asset
+      - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
-          files: output/seatable.tar.gz  # 自动匹配当前 Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 自动注入，无需额外配置
+          files: output/seatable.tar.gz  # 自动匹配文件名和 Release
