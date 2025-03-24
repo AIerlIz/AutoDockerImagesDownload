@@ -1,6 +1,7 @@
 name: Build and Release seatable.tar.gz
 
 on:
+  workflow_dispatch:
   release:
     types: [created]
   schedule:
