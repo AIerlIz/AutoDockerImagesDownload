@@ -7,6 +7,8 @@ on:
     - cron: '0 2 * * *' # 每天 00:00 执行
       timezone: Asia/Shanghai # 设置时区为中国
 
+workflow_dispatch
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
