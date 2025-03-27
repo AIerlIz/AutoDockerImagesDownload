@@ -5,8 +5,8 @@ on:
   release:
     types: [created]
   schedule:
-    - cron: '0 2 * * *' # 每天 02:00 执行
-      timezone: Asia/Shanghai # 设置时区为中国
+    - cron: '0 2 * * *'  # 每天 02:00 执行
+      timezone: Asia/Shanghai  # 设置时区为中国
 
 jobs:
   build-and-release:
@@ -29,7 +29,7 @@ jobs:
           IMAGE_GROUPS=$(yq eval '.image_groups | keys' docker_images.yml | tr -d '[:space:]' | tr '\n' ' ')
           echo "Found image groups: $IMAGE_GROUPS"
           
-          # 根据组名获取对应的镜像并保存为文件
+          # 遍历每个镜像组，单独打包
           for group in $IMAGE_GROUPS; do
             # 获取该组的所有镜像
             IMAGES=$(yq eval ".image_groups.$group[]" docker_images.yml)
@@ -37,6 +37,7 @@ jobs:
             
             # 将镜像名称拼接成一个临时变量
             DOCKER_IMAGES=""
+
             for image in $IMAGES; do
               DOCKER_IMAGES="$DOCKER_IMAGES $image"
             done
