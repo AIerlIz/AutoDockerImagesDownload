@@ -1,12 +1,12 @@
-name: Build and Release DockerImages
+name: Build and Release seatable.tar.gz
 
 on:
   workflow_dispatch:
   release:
     types: [created]
   schedule:
-    - cron: '0 2 * * *'  # 每天 02:00 执行
-      timezone: Asia/Shanghai  # 设置时区为中国
+    - cron: '0 2 * * *' # 每天 02:00 执行
+      timezone: Asia/Shanghai # 设置时区为中国
 
 jobs:
   build-and-release:
@@ -18,49 +18,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install yq (YAML parser)
+      - name: Pull Docker images
         run: |
-          wget https://github.com/mikefarah/yq/releases/download/v4.16.1/yq_linux_amd64 -O /usr/local/bin/yq
-          chmod +x /usr/local/bin/yq
+          docker pull seatable/seatable-python-runner:latest
+          docker pull seatable/seatable-developer:latest
+          docker pull seatable/seatable-python-starter:latest
+          docker pull seatable/seatable-python-scheduler:latest
+          docker pull mariadb:10.11
+          docker pull redis:5.0.7
 
-      - name: Load all docker image groups from file
+      - name: Save images to tar.gz
         run: |
-          # 读取所有镜像组
-          IMAGE_GROUPS=$(yq eval '.image_groups | keys' docker_images.yml | tr -d '[:space:]' | tr '\n' ' ')
-          echo "Found image groups: $IMAGE_GROUPS"
-          
-          # 遍历每个镜像组，单独拉取并打包
-          for group in $IMAGE_GROUPS; do
-            # 获取该组的所有镜像
-            IMAGES=$(yq eval ".image_groups.$group[]" docker_images.yml)
-            echo "Group $group images: $IMAGES"
-            
-            # 拉取该组的镜像
-            for image in $IMAGES; do
-              echo "Pulling image: $image"
-              docker pull $image
-            done
-            
-            # 将镜像名称拼接成一个临时变量
-            DOCKER_IMAGES=""
-            for image in $IMAGES; do
-              DOCKER_IMAGES="$DOCKER_IMAGES $image"
-            done
-            
-            # 根据组名打包并命名文件
-            FILENAME="${group}.tar.gz"
-            mkdir -p output
-            docker save $DOCKER_IMAGES | gzip > output/$FILENAME
-            echo "Created $FILENAME"
-            
-            # 为上传准备 SHA256 校验和文件
-            sha256sum output/$FILENAME > output/$FILENAME.sha256
-          done
+          mkdir -p output
+          docker save \
+            seatable/seatable-python-runner:latest \
+            seatable/seatable-developer:latest \
+            seatable/seatable-python-starter:latest \
+            seatable/seatable-python-scheduler:latest \
+            mariadb:10.11 \
+            redis:5.0.7 \
+            | gzip > output/seatable.tar.gz
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            output/*.tar.gz
-            output/*.tar.gz.sha256
-          tag_name: latest
+          files: output/seatable.tar.gz  # 自动匹配文件名和 Release
+          tag_name: latest              # 指定上传到 latest 标签
