@@ -1,4 +1,4 @@
-name: Build and Release seatable.tar.gz
+name: Build and Release qwen.tar.gz
 
 on:
   workflow_dispatch:
