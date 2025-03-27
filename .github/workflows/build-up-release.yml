@@ -1,4 +1,4 @@
-name: Build and Release seatable.tar.gz
+name: Build and Release DockerImages
 
 on:
   workflow_dispatch:
