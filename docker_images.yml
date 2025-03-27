@@ -1,0 +1,11 @@
+image_groups:
+  seatable:
+    - seatable/seatable-python-runner:latest
+    - seatable/seatable-developer:latest
+    - seatable/seatable-python-starter:latest
+    - seatable/seatable-python-scheduler:latest
+    - mariadb:10.11
+    - redis:5.0.7
+
+  nastools:
+    - 0xforee/nas-tools:latest
