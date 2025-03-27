@@ -18,29 +18,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Pull Docker images
+      - name: Define Docker images
+        run: echo "DOCKER_IMAGES=seatable/seatable-python-runner:latest seatable/seatable-developer:latest seatable/seatable-python-starter:latest seatable/seatable-python-scheduler:latest mariadb:10.11 redis:5.0.7" >> $GITHUB_ENV
+
+      - name: Pull Docker images in parallel
         run: |
-          docker pull seatable/seatable-python-runner:latest
-          docker pull seatable/seatable-developer:latest
-          docker pull seatable/seatable-python-starter:latest
-          docker pull seatable/seatable-python-scheduler:latest
-          docker pull mariadb:10.11
-          docker pull redis:5.0.7
+          echo "Pulling Docker images in parallel..."
+          for image in $DOCKER_IMAGES; do
+            docker pull $image &
+          done
+          wait
 
       - name: Save images to tar.gz
         run: |
           mkdir -p output
-          docker save \
-            seatable/seatable-python-runner:latest \
-            seatable/seatable-developer:latest \
-            seatable/seatable-python-starter:latest \
-            seatable/seatable-python-scheduler:latest \
-            mariadb:10.11 \
-            redis:5.0.7 \
-            | gzip > output/seatable.tar.gz
+          docker save $DOCKER_IMAGES | gzip > output/seatable.tar.gz
+
+      - name: Generate SHA256 checksum
+        run: |
+          sha256sum output/seatable.tar.gz > output/seatable.tar.gz.sha256
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
-          files: output/seatable.tar.gz  # 自动匹配文件名和 Release
-          tag_name: latest              # 指定上传到 latest 标签
+          files: |
+            output/seatable.tar.gz
+            output/seatable.tar.gz.sha256
+          tag_name: latest
