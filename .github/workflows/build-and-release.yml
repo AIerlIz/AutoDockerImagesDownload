@@ -18,30 +18,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Define Docker images
-        run: echo "DOCKER_IMAGES=seatable/seatable-python-runner:latest seatable/seatable-developer:latest seatable/seatable-python-starter:latest seatable/seatable-python-scheduler:latest mariadb:10.11 redis:5.0.7" >> $GITHUB_ENV
-
-      - name: Pull Docker images in parallel
+      - name: Install yq (YAML parser)
         run: |
-          echo "Pulling Docker images in parallel..."
-          for image in $DOCKER_IMAGES; do
-            docker pull $image &
+          wget https://github.com/mikefarah/yq/releases/download/v4.16.1/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: Load all docker image groups from file
+        run: |
+          # 读取所有镜像组
+          IMAGE_GROUPS=$(yq eval '.image_groups | keys' docker_images.yml | tr -d '[:space:]' | tr '\n' ' ')
+          echo "Found image groups: $IMAGE_GROUPS"
+          
+          # 根据组名获取对应的镜像并保存为文件
+          for group in $IMAGE_GROUPS; do
+            # 获取该组的所有镜像
+            IMAGES=$(yq eval ".image_groups.$group[]" docker_images.yml)
+            echo "Group $group images: $IMAGES"
+            
+            # 将镜像名称拼接成一个临时变量
+            DOCKER_IMAGES=""
+            for image in $IMAGES; do
+              DOCKER_IMAGES="$DOCKER_IMAGES $image"
+            done
+            
+            # 根据组名打包并命名文件
+            FILENAME="seatable-${group}.tar.gz"
+            mkdir -p output
+            docker save $DOCKER_IMAGES | gzip > output/$FILENAME
+            echo "Created $FILENAME"
+            
+            # 为上传准备 SHA256 校验和文件
+            sha256sum output/$FILENAME > output/$FILENAME.sha256
           done
-          wait
-
-      - name: Save images to tar.gz
-        run: |
-          mkdir -p output
-          docker save $DOCKER_IMAGES | gzip > output/seatable.tar.gz
-
-      - name: Generate SHA256 checksum
-        run: |
-          sha256sum output/seatable.tar.gz > output/seatable.tar.gz.sha256
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            output/seatable.tar.gz
-            output/seatable.tar.gz.sha256
+            output/*.tar.gz
+            output/*.tar.gz.sha256
           tag_name: latest
