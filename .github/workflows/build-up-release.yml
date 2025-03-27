@@ -42,7 +42,7 @@ jobs:
             done
             
             # 根据组名打包并命名文件
-            FILENAME="seatable-${group}.tar.gz"
+            FILENAME="${group}.tar.gz"
             mkdir -p output
             docker save $DOCKER_IMAGES | gzip > output/$FILENAME
             echo "Created $FILENAME"
