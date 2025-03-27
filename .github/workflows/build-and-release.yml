@@ -44,4 +44,3 @@ jobs:
         with:
           files: output/seatable.tar.gz  # 自动匹配文件名和 Release
           tag_name: latest              # 指定上传到 latest 标签
-          overwrite: true               # 覆盖已有的 latest 标签
