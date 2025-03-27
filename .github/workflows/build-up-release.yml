@@ -29,15 +29,20 @@ jobs:
           IMAGE_GROUPS=$(yq eval '.image_groups | keys' docker_images.yml | tr -d '[:space:]' | tr '\n' ' ')
           echo "Found image groups: $IMAGE_GROUPS"
           
-          # 遍历每个镜像组，单独打包
+          # 遍历每个镜像组，单独拉取并打包
           for group in $IMAGE_GROUPS; do
             # 获取该组的所有镜像
             IMAGES=$(yq eval ".image_groups.$group[]" docker_images.yml)
             echo "Group $group images: $IMAGES"
             
+            # 拉取该组的镜像
+            for image in $IMAGES; do
+              echo "Pulling image: $image"
+              docker pull $image
+            done
+            
             # 将镜像名称拼接成一个临时变量
             DOCKER_IMAGES=""
-
             for image in $IMAGES; do
               DOCKER_IMAGES="$DOCKER_IMAGES $image"
             done
