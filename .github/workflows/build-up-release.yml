@@ -39,7 +39,7 @@ jobs:
           import hashlib
           
           # 读取配置文件
-          with open('docker_images.yml', 'r') as file:
+          with open('docker-images.yml', 'r') as file:
               config = yaml.safe_load(file)
           
           # 创建MD5校验文件
