@@ -42,9 +42,6 @@ jobs:
           with open('docker-images.yml', 'r') as file:
               config = yaml.safe_load(file)
           
-          # 创建MD5校验文件
-          md5_file = open('output/md5sums.txt', 'w')
-          
           # 处理每个镜像组
           for group_name, images in config['image_groups'].items():
               print(f"Processing group: {group_name}")
@@ -71,10 +68,15 @@ jobs:
                       md5_hash.update(chunk)
               
               md5_value = md5_hash.hexdigest()
-              md5_file.write(f"{md5_value}  {group_name}.tar.gz\n")
+              
+              # 为每个分组创建独立的MD5文件
+              with open(f"output/{group_name}.md5", 'w') as group_md5_file:
+                  group_md5_file.write(f"{md5_value}  {group_name}.tar.gz\n")
+              
+
               print(f"Generated {output_file} with MD5: {md5_value}")
           
-          md5_file.close()
+
           print("All docker images processed successfully!")
           EOF
 
@@ -83,5 +85,5 @@ jobs:
         with:
           files: |
             output/*.tar.gz
-            output/md5sums.txt
+            output/*.md5
           tag_name: latest              # 指定上传到 latest 标签
