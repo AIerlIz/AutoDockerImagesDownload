@@ -34,48 +34,24 @@ jobs:
           python - <<EOF
           import yaml
           import subprocess
-          import concurrent.futures
-          import sys
           
           # 读取配置文件
           with open('docker-images.yml', 'r') as file:
               config = yaml.safe_load(file)
           
-          # 定义拉取镜像的函数
-          def pull_image(image):
-              try:
-                  print(f"Pulling image: {image}")
-                  result = subprocess.run(["docker", "pull", image], 
-                                        check=False, 
-                                        capture_output=True, 
-                                        text=True)
-                  if result.returncode != 0:
-                      print(f"Error pulling {image}: {result.stderr}", file=sys.stderr)
-                      return False
-                  return True
-              except Exception as e:
-                  print(f"Exception pulling {image}: {str(e)}", file=sys.stderr)
-                  return False
-          
-          # 同步拉取所有镜像（并行处理）
+          # 同步拉取所有镜像
           print("Synchronizing all Docker images...")
           all_images = []
           for group_name, images in config['image_groups'].items():
               print(f"Syncing group: {group_name}")
               all_images.extend(images)
           
-          # 使用线程池并行拉取镜像
-          success_count = 0
-          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-              future_to_image = {executor.submit(pull_image, image): image for image in all_images}
-              for future in concurrent.futures.as_completed(future_to_image):
-                  image = future_to_image[future]
-                  if future.result():
-                      success_count += 1
+          # 拉取所有镜像
+          for image in all_images:
+              print(f"Pulling image: {image}")
+              subprocess.run(["docker", "pull", image], check=True)
           
-          print(f"Successfully pulled {success_count}/{len(all_images)} Docker images")
-          if success_count < len(all_images):
-              print("Warning: Some images failed to pull, but continuing with available images")
+          print("All Docker images synchronized successfully!")
           EOF
 
       - name: Process Docker Images
@@ -87,82 +63,48 @@ jobs:
           import os
           import subprocess
           import hashlib
-          import concurrent.futures
-          import sys
           
           # 读取配置文件
           with open('docker-images.yml', 'r') as file:
               config = yaml.safe_load(file)
           
-          # 定义处理单个镜像组的函数
-          def process_image_group(group_info):
-              group_name, images = group_info
-              try:
-                  print(f"Processing group: {group_name}")
-                  
-                  # 保存镜像到tar.gz，使用更高的压缩级别
-                  output_file = f"output/{group_name}.tar.gz"
-                  save_cmd = ["docker", "save"] + images
-                  
-                  # 使用管道优化 docker save 和 gzip 操作
-                  # 使用 -9 参数提高压缩率，减少文件大小
-                  with open(output_file, 'wb') as f:
-                      save_process = subprocess.Popen(save_cmd, stdout=subprocess.PIPE)
-                      gzip_process = subprocess.Popen(["gzip", "-9"], stdin=save_process.stdout, stdout=f)
-                      save_process.stdout.close()  # 允许save_process在pipe关闭时接收SIGPIPE
-                      gzip_process.communicate()
-                      
-                      # 检查进程是否成功完成
-                      if save_process.returncode != 0 or gzip_process.returncode != 0:
-                          print(f"Error processing group {group_name}", file=sys.stderr)
-                          return False, group_name, None
-                  
-                  # 计算MD5
-                  md5_hash = hashlib.md5()
-                  with open(output_file, 'rb') as f:
-                      # 增加读取块大小以提高效率
-                      for chunk in iter(lambda: f.read(8192), b""):
-                          md5_hash.update(chunk)
-                  
-                  md5_value = md5_hash.hexdigest()
-                  
-                  # 为每个分组创建独立的MD5文件
-                  with open(f"output/{group_name}.md5", 'w') as group_md5_file:
-                      group_md5_file.write(f"{md5_value}")
-                  
-                  print(f"Generated {output_file} with MD5: {md5_value}")
-                  return True, group_name, md5_value
-              except Exception as e:
-                  print(f"Exception processing group {group_name}: {str(e)}", file=sys.stderr)
-                  return False, group_name, None
-          
-          # 并行处理所有镜像组
-          success_count = 0
-          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-              future_to_group = {executor.submit(process_image_group, (group_name, images)): group_name 
-                               for group_name, images in config['image_groups'].items()}
+          # 处理每个镜像组
+          for group_name, images in config['image_groups'].items():
+              print(f"Processing group: {group_name}")
               
-              for future in concurrent.futures.as_completed(future_to_group):
-                  success, group_name, md5 = future.result()
-                  if success:
-                      success_count += 1
-                      print(f"Successfully processed group: {group_name}")
-                  else:
-                      print(f"Failed to process group: {group_name}")
+              # 由于已经在前一步骤同步拉取了所有镜像，这里不再需要拉取
+              
+              # 保存镜像到tar.gz
+              output_file = f"output/{group_name}.tar.gz"
+              save_cmd = ["docker", "save"] + images
+              
+              with open(output_file, 'wb') as f:
+                  save_process = subprocess.Popen(save_cmd, stdout=subprocess.PIPE)
+                  gzip_process = subprocess.Popen(["gzip"], stdin=save_process.stdout, stdout=f)
+                  save_process.stdout.close()  # 允许save_process在pipe关闭时接收SIGPIPE
+                  gzip_process.communicate()
+              
+              # 计算MD5
+              md5_hash = hashlib.md5()
+              with open(output_file, 'rb') as f:
+                  for chunk in iter(lambda: f.read(4096), b""):
+                      md5_hash.update(chunk)
+              
+              md5_value = md5_hash.hexdigest()
+              
+              # 为每个分组创建独立的MD5文件
+              with open(f"output/{group_name}.md5", 'w') as group_md5_file:
+                  group_md5_file.write(f"{md5_value}")
+              
+
+              print(f"Generated {output_file} with MD5: {md5_value}")
           
-          print(f"Successfully processed {success_count}/{len(config['image_groups'])} image groups")
-          if success_count < len(config['image_groups']):
-              print("Warning: Some image groups failed to process")
-              # 如果所有组都失败，则退出错误
-              if success_count == 0:
-                  sys.exit(1)
-          else:
-              print("All docker images processed successfully!")
+
+          print("All docker images processed successfully!")
           EOF
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v1
-        if: success()
         with:
           files: |
             output/*.tar.gz
