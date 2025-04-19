@@ -71,7 +71,7 @@ jobs:
               
               # 为每个分组创建独立的MD5文件
               with open(f"output/{group_name}.md5", 'w') as group_md5_file:
-                  group_md5_file.write(f"{md5_value}  {group_name}.tar.gz\n")
+                  group_md5_file.write(f"{md5_value}")
               
 
               print(f"Generated {output_file} with MD5: {md5_value}")
