@@ -28,6 +28,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml
 
+      - name: Sync Pull All Docker Images
+        id: sync_pull_images
+        run: |
+          python - <<EOF
+          import yaml
+          import subprocess
+          
+          # 读取配置文件
+          with open('docker-images.yml', 'r') as file:
+              config = yaml.safe_load(file)
+          
+          # 同步拉取所有镜像
+          print("Synchronizing all Docker images...")
+          all_images = []
+          for group_name, images in config['image_groups'].items():
+              print(f"Syncing group: {group_name}")
+              all_images.extend(images)
+          
+          # 拉取所有镜像
+          for image in all_images:
+              print(f"Pulling image: {image}")
+              subprocess.run(["docker", "pull", image], check=True)
+          
+          print("All Docker images synchronized successfully!")
+          EOF
+
       - name: Process Docker Images
         id: process_images
         run: |
@@ -46,10 +72,7 @@ jobs:
           for group_name, images in config['image_groups'].items():
               print(f"Processing group: {group_name}")
               
-              # 拉取镜像
-              for image in images:
-                  print(f"Pulling image: {image}")
-                  subprocess.run(["docker", "pull", image], check=True)
+              # 由于已经在前一步骤同步拉取了所有镜像，这里不再需要拉取
               
               # 保存镜像到tar.gz
               output_file = f"output/{group_name}.tar.gz"
