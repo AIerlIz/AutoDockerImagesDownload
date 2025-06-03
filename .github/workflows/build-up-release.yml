@@ -84,20 +84,20 @@ jobs:
                   save_process.stdout.close()  # 允许save_process在pipe关闭时接收SIGPIPE
                   gzip_process.communicate()
               
-              # 计算MD5
-              md5_hash = hashlib.md5()
+              # 计算SHA256
+              sha256_hash = hashlib.sha256()
               with open(output_file, 'rb') as f:
                   for chunk in iter(lambda: f.read(4096), b""):
-                      md5_hash.update(chunk)
+                      sha256_hash.update(chunk)
               
-              md5_value = md5_hash.hexdigest()
+              sha256_value = sha256_hash.hexdigest()
               
-              # 为每个分组创建独立的MD5文件
-              with open(f"output/{group_name}.md5", 'w') as group_md5_file:
-                  group_md5_file.write(f"{md5_value}")
+              # 为每个分组创建独立的SHA256文件
+              with open(f"output/{group_name}.sha256", 'w') as group_sha256_file:
+                  group_sha256_file.write(f"{sha256_value}")
               
 
-              print(f"Generated {output_file} with MD5: {md5_value}")
+              print(f"Generated {output_file} with SHA256: {sha256_value}")
           
 
           print("All docker images processed successfully!")
@@ -108,5 +108,5 @@ jobs:
         with:
           files: |
             output/*.tar.gz
-            output/*.md5
+            output/*.sha256
           tag_name: latest              # 指定上传到 latest 标签
