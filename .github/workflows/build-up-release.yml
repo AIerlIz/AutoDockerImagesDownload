@@ -5,7 +5,7 @@ on:
   release:
     types: [created]
   schedule:
-    - cron: '0 20 * * *' # 每天北京时间 04:00 执行
+    - cron: '0 20 1/7 * *' # 每天北京时间 04:00 执行
 
 jobs:
   build-and-release:
