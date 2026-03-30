@@ -6,6 +6,13 @@ image_groups:
     - seatable/seatable-python-scheduler:latest
     - mariadb:10.11
     - redis:5.0.7
+  seatable6.0:
+    - seatable/seatable-python-runner:latest
+    - seatable/seatable-developer:6.0.0
+    - seatable/seatable-python-starter:latest
+    - seatable/seatable-python-scheduler:latest
+    - mariadb:10.11
+    - redis:5.0.7
   seatable5.3:
     - seatable/seatable-python-runner:latest
     - seatable/seatable-developer:5.3.0
