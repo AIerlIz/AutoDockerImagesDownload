@@ -35,6 +35,7 @@ jobs:
           import requests
           import re
           import os
+          import json
           
           # 读取配置文件
           with open('docker-images.yml', 'r') as file:
@@ -78,6 +79,12 @@ jobs:
           # 存储版本信息
           versions = {}
           
+          # 加载上次保存的版本信息
+          old_versions = {}
+          if os.path.exists('last_versions.json'):
+              with open('last_versions.json', 'r') as f:
+                  old_versions = json.load(f)
+          
           for group_name, group_config in config['image_groups'].items():
               core_image = group_config.get('core_image')
               if core_image:
@@ -89,18 +96,26 @@ jobs:
                           'latest_version': latest_version
                       }
                       print(f"  Latest version: {latest_version}")
+                      
+                      # 检查版本是否有变化
+                      old_version = old_versions.get(group_name, {}).get('latest_version')
+                      if old_version == latest_version:
+                          print(f"  Version unchanged, skipping update for {group_name}")
+                          versions[group_name]['skip'] = True
+                      else:
+                          print(f"  Version changed: {old_version} -> {latest_version}")
+                          versions[group_name]['skip'] = False
                   else:
                       print(f"  Warning: No version tags found for {core_image}")
           
           # 将版本信息写入文件供后续步骤使用
           with open('versions.json', 'w') as f:
-              import json
               json.dump(versions, f)
           
           print("Version information saved to versions.json")
           EOF
 
-      - name: Sync Pull All Docker Images
+      - name: Sync Pull Docker Images (Changed Groups Only)
         id: sync_pull_images
         run: |
           python - <<EOF
@@ -116,10 +131,16 @@ jobs:
           with open('versions.json', 'r') as f:
               versions = json.load(f)
           
-          # 同步拉取所有镜像
-          print("Synchronizing all Docker images...")
+          # 同步拉取镜像（仅版本有变化的分组）
+          print("Synchronizing Docker images for changed groups...")
           all_images = []
+          
           for group_name, group_config in config['image_groups'].items():
+              # 检查是否需要跳过
+              if group_name in versions and versions[group_name].get('skip', False):
+                  print(f"Skipping group {group_name} (version unchanged)")
+                  continue
+              
               print(f"Syncing group: {group_name}")
               images = group_config.get('images', [])
               all_images.extend(images)
@@ -132,15 +153,17 @@ jobs:
                   all_images.append(versioned_image)
                   print(f"  Adding versioned image: {versioned_image}")
           
-          # 拉取所有镜像
-          for image in all_images:
-              print(f"Pulling image: {image}")
-              subprocess.run(["docker", "pull", image], check=True)
-          
-          print("All Docker images synchronized successfully!")
+          # 拉取镜像
+          if all_images:
+              for image in all_images:
+                  print(f"Pulling image: {image}")
+                  subprocess.run(["docker", "pull", image], check=True)
+              print("Docker images synchronized successfully!")
+          else:
+              print("No images to pull (all groups unchanged)")
           EOF
 
-      - name: Process Docker Images
+      - name: Process Docker Images (Changed Groups Only)
         id: process_images
         run: |
           mkdir -p output
@@ -159,8 +182,13 @@ jobs:
           with open('versions.json', 'r') as f:
               versions = json.load(f)
           
-          # 处理每个镜像组
+          # 处理每个镜像组（仅版本有变化的分组）
           for group_name, group_config in config['image_groups'].items():
+              # 检查是否需要跳过
+              if group_name in versions and versions[group_name].get('skip', False):
+                  print(f"Skipping group {group_name} (version unchanged)")
+                  continue
+              
               print(f"Processing group: {group_name}")
               
               images = group_config.get('images', [])
@@ -197,7 +225,7 @@ jobs:
               
               print(f"Generated {output_file} with MD5: {md5_value}")
           
-          print("All docker images processed successfully!")
+          print("Docker images processing completed!")
           EOF
 
       - name: Upload to GitHub Releases
@@ -216,6 +244,17 @@ jobs:
           # 读取版本信息
           with open('versions.json', 'r') as f:
               versions = json.load(f)
+          
+          # 检查是否有任何分组需要更新
+          has_changes = any(not version_info.get('skip', False) for version_info in versions.values())
+          
+          if not has_changes:
+              print("No changes detected for any group, skipping all releases")
+              # 更新版本记录文件
+              with open('last_versions.json', 'w') as f:
+                  json.dump(versions, f)
+              print("Updated last_versions.json")
+              return
           
           # 1. 上传所有文件到latest Release（保持原有功能）
           print("Uploading all files to latest release...")
@@ -245,6 +284,11 @@ jobs:
           # 2. 为每个分组创建独立的Release并上传文件（原有功能）
           print("\nProcessing individual group releases...")
           for group_name in config['image_groups'].keys():
+              # 检查是否需要跳过
+              if group_name in versions and versions[group_name].get('skip', False):
+                  print(f"Skipping release for group {group_name} (version unchanged)")
+                  continue
+              
               print(f"Processing release for group: {group_name}")
               
               tar_file = f"output/{group_name}.tar.gz"
@@ -286,6 +330,11 @@ jobs:
           # 3. 为每个分组创建版本号命名的Release（新增功能）
           print("\nProcessing versioned releases for core images...")
           for group_name, version_info in versions.items():
+              # 检查是否需要跳过
+              if version_info.get('skip', False):
+                  print(f"Skipping versioned release for group {group_name} (version unchanged)")
+                  continue
+              
               core_image = version_info['core_image']
               latest_version = version_info['latest_version']
               
@@ -327,6 +376,12 @@ jobs:
                   else:
                       print(f"Error creating versioned release for {group_name}: {e.stderr}")
                       raise
+          
+          # 4. 更新版本记录文件
+          print("\nUpdating version records...")
+          with open('last_versions.json', 'w') as f:
+              json.dump(versions, f)
+          print("Updated last_versions.json")
           
           print("\nAll releases processed successfully!")
           EOF
