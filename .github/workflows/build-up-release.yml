@@ -25,7 +25,80 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
+          pip install pyyaml requests
+
+      - name: Get Latest Version of Core Images
+        id: get_versions
+        run: |
+          python - <<EOF
+          import yaml
+          import requests
+          import re
+          import os
+          
+          # 读取配置文件
+          with open('docker-images.yml', 'r') as file:
+              config = yaml.safe_load(file)
+          
+          # 获取Docker Hub认证token
+          def get_dockerhub_token(repo):
+              url = f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull"
+              response = requests.get(url)
+              return response.json().get('token')
+          
+          # 获取镜像标签列表
+          def get_image_tags(repo, token):
+              url = f"https://registry-1.docker.io/v2/{repo}/tags/list"
+              headers = {"Authorization": f"Bearer {token}"}
+              response = requests.get(url, headers=headers)
+              return response.json().get('tags', [])
+          
+          # 获取最新的非latest版本标签
+          def get_latest_version(repo):
+              token = get_dockerhub_token(repo)
+              tags = get_image_tags(repo, token)
+              
+              # 过滤掉latest和其他非版本标签
+              version_pattern = re.compile(r'^v?\d+\.\d+(\.\d+)?(-[a-zA-Z0-9]+)?$')
+              version_tags = [tag for tag in tags if version_pattern.match(tag)]
+              
+              if not version_tags:
+                  return None
+              
+              # 按版本号排序，获取最新版本
+              def version_key(v):
+                  # 去掉v前缀，分割版本号
+                  v = v.lstrip('v').split('-')[0]
+                  parts = v.split('.')
+                  return [int(p) for p in parts]
+              
+              version_tags.sort(key=version_key, reverse=True)
+              return version_tags[0]
+          
+          # 存储版本信息
+          versions = {}
+          
+          for group_name, group_config in config['image_groups'].items():
+              core_image = group_config.get('core_image')
+              if core_image:
+                  print(f"Getting latest version for {core_image}...")
+                  latest_version = get_latest_version(core_image)
+                  if latest_version:
+                      versions[group_name] = {
+                          'core_image': core_image,
+                          'latest_version': latest_version
+                      }
+                      print(f"  Latest version: {latest_version}")
+                  else:
+                      print(f"  Warning: No version tags found for {core_image}")
+          
+          # 将版本信息写入文件供后续步骤使用
+          with open('versions.json', 'w') as f:
+              import json
+              json.dump(versions, f)
+          
+          print("Version information saved to versions.json")
+          EOF
 
       - name: Sync Pull All Docker Images
         id: sync_pull_images
@@ -33,17 +106,31 @@ jobs:
           python - <<EOF
           import yaml
           import subprocess
+          import json
           
           # 读取配置文件
           with open('docker-images.yml', 'r') as file:
               config = yaml.safe_load(file)
           
+          # 读取版本信息
+          with open('versions.json', 'r') as f:
+              versions = json.load(f)
+          
           # 同步拉取所有镜像
           print("Synchronizing all Docker images...")
           all_images = []
-          for group_name, images in config['image_groups'].items():
+          for group_name, group_config in config['image_groups'].items():
               print(f"Syncing group: {group_name}")
+              images = group_config.get('images', [])
               all_images.extend(images)
+              
+              # 如果有核心镜像的最新版本，也拉取它
+              if group_name in versions:
+                  core_image = versions[group_name]['core_image']
+                  latest_version = versions[group_name]['latest_version']
+                  versioned_image = f"{core_image}:{latest_version}"
+                  all_images.append(versioned_image)
+                  print(f"  Adding versioned image: {versioned_image}")
           
           # 拉取所有镜像
           for image in all_images:
@@ -62,16 +149,29 @@ jobs:
           import os
           import subprocess
           import hashlib
+          import json
           
           # 读取配置文件
           with open('docker-images.yml', 'r') as file:
               config = yaml.safe_load(file)
           
+          # 读取版本信息
+          with open('versions.json', 'r') as f:
+              versions = json.load(f)
+          
           # 处理每个镜像组
-          for group_name, images in config['image_groups'].items():
+          for group_name, group_config in config['image_groups'].items():
               print(f"Processing group: {group_name}")
               
-              # 由于已经在前一步骤同步拉取了所有镜像，这里不再需要拉取
+              images = group_config.get('images', [])
+              
+              # 如果有核心镜像的最新版本，也添加到镜像列表
+              if group_name in versions:
+                  core_image = versions[group_name]['core_image']
+                  latest_version = versions[group_name]['latest_version']
+                  versioned_image = f"{core_image}:{latest_version}"
+                  images = images + [versioned_image]
+                  print(f"  Including versioned image: {versioned_image}")
               
               # 保存镜像到tar.gz
               output_file = f"output/{group_name}.tar.gz"
@@ -95,10 +195,8 @@ jobs:
               with open(f"output/{group_name}.md5", 'w') as group_md5_file:
                   group_md5_file.write(f"{md5_value}")
               
-
               print(f"Generated {output_file} with MD5: {md5_value}")
           
-
           print("All docker images processed successfully!")
           EOF
 
@@ -109,10 +207,15 @@ jobs:
           import os
           import subprocess
           import glob
+          import json
           
           # 读取配置文件
           with open('docker-images.yml', 'r') as file:
               config = yaml.safe_load(file)
+          
+          # 读取版本信息
+          with open('versions.json', 'r') as f:
+              versions = json.load(f)
           
           # 1. 上传所有文件到latest Release（保持原有功能）
           print("Uploading all files to latest release...")
@@ -139,7 +242,7 @@ jobs:
                   print(f"Error creating latest release: {e.stderr}")
                   raise
           
-          # 2. 为每个分组创建独立的Release并上传文件（新增功能）
+          # 2. 为每个分组创建独立的Release并上传文件（原有功能）
           print("\nProcessing individual group releases...")
           for group_name in config['image_groups'].keys():
               print(f"Processing release for group: {group_name}")
@@ -178,6 +281,51 @@ jobs:
                       print(f"Uploaded files to existing release {tag_name}")
                   else:
                       print(f"Error creating release for {group_name}: {e.stderr}")
+                      raise
+          
+          # 3. 为每个分组创建版本号命名的Release（新增功能）
+          print("\nProcessing versioned releases for core images...")
+          for group_name, version_info in versions.items():
+              core_image = version_info['core_image']
+              latest_version = version_info['latest_version']
+              
+              print(f"Processing versioned release for {group_name} (version: {latest_version})")
+              
+              tar_file = f"output/{group_name}.tar.gz"
+              md5_file = f"output/{group_name}.md5"
+              
+              # 检查文件是否存在
+              if not os.path.exists(tar_file) or not os.path.exists(md5_file):
+                  print(f"Warning: Files for group {group_name} not found, skipping...")
+                  continue
+              
+              # 使用版本号作为tag名
+              version_tag = f"{group_name}-{latest_version}"
+              release_title = f"Docker Images - {group_name} {latest_version}"
+              release_notes = f"Automated release for {group_name} docker images\n\nCore image: {core_image}:{latest_version}"
+              
+              # 创建或更新release并上传文件
+              try:
+                  # 尝试创建release（如果已存在会失败）
+                  subprocess.run([
+                      "gh", "release", "create", version_tag,
+                      tar_file, md5_file,
+                      "--title", release_title,
+                      "--notes", release_notes
+                  ], check=True, capture_output=True, text=True)
+                  print(f"Created versioned release {version_tag} and uploaded files")
+              except subprocess.CalledProcessError as e:
+                  # 如果release已存在，上传文件到现有release
+                  if "already exists" in e.stderr or "tag_name" in e.stderr.lower():
+                      print(f"Release {version_tag} already exists, uploading files...")
+                      subprocess.run([
+                          "gh", "release", "upload", version_tag,
+                          tar_file, md5_file,
+                          "--clobber"  # 覆盖已存在的文件
+                      ], check=True)
+                      print(f"Uploaded files to existing release {version_tag}")
+                  else:
+                      print(f"Error creating versioned release for {group_name}: {e.stderr}")
                       raise
           
           print("\nAll releases processed successfully!")

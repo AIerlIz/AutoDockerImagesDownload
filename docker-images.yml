@@ -1,32 +1,15 @@
 image_groups:
   seatable:
-    - seatable/seatable-python-runner:latest
-    - seatable/seatable-developer:latest
-    - seatable/seatable-python-starter:latest
-    - seatable/seatable-python-scheduler:latest
-    - mariadb:10.11
-    - redis:5.0.7
-  seatable6.0:
-    - seatable/seatable-python-runner:latest
-    - seatable/seatable-developer:6.0.0
-    - seatable/seatable-python-starter:latest
-    - seatable/seatable-python-scheduler:latest
-    - mariadb:10.11
-    - redis:5.0.7
-  seatable5.3:
-    - seatable/seatable-python-runner:latest
-    - seatable/seatable-developer:5.3.0
-    - seatable/seatable-python-starter:latest
-    - seatable/seatable-python-scheduler:latest
-    - mariadb:10.11
-    - redis:5.0.7
-  seatable5.2:
-    - seatable/seatable-python-runner:latest
-    - seatable/seatable-developer:5.2.0
-    - seatable/seatable-python-starter:latest
-    - seatable/seatable-python-scheduler:latest
-    - mariadb:10.11
-    - redis:5.0.7
+    core_image: seatable/seatable-developer
+    images:
+      - seatable/seatable-developer:latest
+      - seatable/seatable-python-runner:latest
+      - seatable/seatable-python-starter:latest
+      - seatable/seatable-python-scheduler:latest
+      - mariadb:10.11
+      - redis:5.0.7
 
   nastools:
-    - 0xforee/nas-tools:latest
+    core_image: 0xforee/nas-tools
+    images:
+      - 0xforee/nas-tools:latest
