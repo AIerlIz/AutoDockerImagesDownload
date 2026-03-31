@@ -103,9 +103,84 @@ jobs:
           EOF
 
       - name: Upload to GitHub Releases
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            output/*.tar.gz
-            output/*.md5
-          tag_name: latest              # 指定上传到 latest 标签
+        run: |
+          python - <<EOF
+          import yaml
+          import os
+          import subprocess
+          import glob
+          
+          # 读取配置文件
+          with open('docker-images.yml', 'r') as file:
+              config = yaml.safe_load(file)
+          
+          # 1. 上传所有文件到latest Release（保持原有功能）
+          print("Uploading all files to latest release...")
+          all_files = glob.glob("output/*.tar.gz") + glob.glob("output/*.md5")
+          
+          try:
+              subprocess.run([
+                  "gh", "release", "create", "latest",
+                  *all_files,
+                  "--title", "Docker Images - Latest",
+                  "--notes", "Automated release containing all docker image groups"
+              ], check=True, capture_output=True, text=True)
+              print("Created latest release and uploaded all files")
+          except subprocess.CalledProcessError as e:
+              if "already exists" in e.stderr or "tag_name" in e.stderr.lower():
+                  print("Latest release already exists, uploading files...")
+                  subprocess.run([
+                      "gh", "release", "upload", "latest",
+                      *all_files,
+                      "--clobber"
+                  ], check=True)
+                  print("Uploaded all files to existing latest release")
+              else:
+                  print(f"Error creating latest release: {e.stderr}")
+                  raise
+          
+          # 2. 为每个分组创建独立的Release并上传文件（新增功能）
+          print("\nProcessing individual group releases...")
+          for group_name in config['image_groups'].keys():
+              print(f"Processing release for group: {group_name}")
+              
+              tar_file = f"output/{group_name}.tar.gz"
+              md5_file = f"output/{group_name}.md5"
+              
+              # 检查文件是否存在
+              if not os.path.exists(tar_file) or not os.path.exists(md5_file):
+                  print(f"Warning: Files for group {group_name} not found, skipping...")
+                  continue
+              
+              # 使用gh cli创建release并上传文件
+              tag_name = group_name
+              release_title = f"Docker Images - {group_name}"
+              
+              # 创建或更新release并上传文件
+              try:
+                  # 尝试创建release（如果已存在会失败）
+                  subprocess.run([
+                      "gh", "release", "create", tag_name,
+                      tar_file, md5_file,
+                      "--title", release_title,
+                      "--notes", f"Automated release for {group_name} docker images"
+                  ], check=True, capture_output=True, text=True)
+                  print(f"Created release {tag_name} and uploaded files")
+              except subprocess.CalledProcessError as e:
+                  # 如果release已存在，上传文件到现有release
+                  if "already exists" in e.stderr or "tag_name" in e.stderr.lower():
+                      print(f"Release {tag_name} already exists, uploading files...")
+                      subprocess.run([
+                          "gh", "release", "upload", tag_name,
+                          tar_file, md5_file,
+                          "--clobber"  # 覆盖已存在的文件
+                      ], check=True)
+                      print(f"Uploaded files to existing release {tag_name}")
+                  else:
+                      print(f"Error creating release for {group_name}: {e.stderr}")
+                      raise
+          
+          print("\nAll releases processed successfully!")
+          EOF
+        env:
+          GH_TOKEN: ${{ github.token }}
