@@ -27,12 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml
 
-      - name: Install GitHub CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gh
-          gh auth setup-git
-
       - name: Sync Pull All Docker Images
         id: sync_pull_images
         run: |
@@ -103,33 +97,15 @@ jobs:
               
 
               print(f"Generated {output_file} with MD5: {md5_value}")
-
-              # 上传到 GitHub Releases
-              release_tag = group_name  # 使用分组名作为 Release 标签
-              release_name = f"{group_name} Docker Images"
-              
-              # 检查 Release 是否存在，如果不存在则创建
-              try:
-                  subprocess.run(["gh", "release", "view", release_tag], check=True, capture_output=True)
-                  print(f"Release {release_tag} already exists. Updating it...")
-                  # 如果存在，删除旧的资产并重新上传
-                  subprocess.run(["gh", "release", "delete-asset", output_file, "--repo", os.environ.get('GITHUB_REPOSITORY'), "--yes"], check=False) # 忽略错误，如果文件不存在
-                  subprocess.run(["gh", "release", "delete-asset", f"output/{group_name}.md5", "--repo", os.environ.get('GITHUB_REPOSITORY'), "--yes"], check=False) # 忽略错误，如果文件不存在
-                  subprocess.run(["gh", "release", "upload", release_tag, output_file, f"output/{group_name}.md5", "--clobber"], check=True)
-              except subprocess.CalledProcessError:
-                  print(f"Release {release_tag} does not exist. Creating it...")
-                  subprocess.run(["gh", "release", "create", release_tag, "--title", release_name, "--notes", f"Docker images for {group_name}", output_file, f"output/{group_name}.md5"], check=True)
+          
 
           print("All docker images processed successfully!")
           EOF
 
-      - name: Upload All to Latest GitHub Release
+      - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
           files: |
             output/*.tar.gz
             output/*.md5
           tag_name: latest              # 指定上传到 latest 标签
-          overwrite: true # 覆盖已存在的资产
-
-
