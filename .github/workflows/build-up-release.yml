@@ -264,7 +264,7 @@ jobs:
               subprocess.run([
                   "gh", "release", "create", "latest",
                   *all_files,
-                  "--title", "Docker Images - Latest",
+                  "--title", "latest",
                   "--notes", "Automated release containing all docker image groups"
               ], check=True, capture_output=True, text=True)
               print("Created latest release and uploaded all files")
@@ -301,7 +301,7 @@ jobs:
               
               # 使用gh cli创建release并上传文件
               tag_name = group_name
-              release_title = f"Docker Images - {group_name}"
+              release_title = f"{group_name}"
               
               # 创建或更新release并上传文件
               try:
@@ -350,7 +350,7 @@ jobs:
               
               # 使用版本号作为tag名
               version_tag = f"{group_name}-{latest_version}"
-              release_title = f"Docker Images - {group_name} {latest_version}"
+              release_title = f"{group_name} {latest_version}"
               release_notes = f"Automated release for {group_name} docker images\n\nCore image: {core_image}:{latest_version}"
               
               # 创建或更新release并上传文件
